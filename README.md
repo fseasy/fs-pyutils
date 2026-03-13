@@ -1,2 +1,3 @@
-# py-utils
-Python utils
+## FS pyutils
+
+Python Utils for fseasy scope.
