@@ -3,6 +3,7 @@ import os
 from typing import Any
 
 #! note1: this module must be used in python env where contains the gunicorn (it's reasonable)
+from gunicorn.config import Config
 from gunicorn.glogging import Logger as GLogger
 
 from .log_builder import JsonSyslogFormatter, NginxAlignedSyslogHandler
@@ -14,13 +15,14 @@ g_hostname = os.getenv("HOSTNAME", "gunicorn-default")
 
 
 class GunicornSyslogLogger(GLogger):
-  def setup(self, cfg):
+  def setup(self, cfg: Config) -> None:
     super().setup(cfg)
 
     ip, port = g_syslog_addr_str.split(":")
     syslog_address = (ip, int(port))
 
-    level = cfg.loglevel  # 继承 gunicorn 的日志级别
+    # 继承 gunicorn 的日志级别 => cfg.loglevel 是 string, 必须得改成 int
+    level = self.LOG_LEVELS.get(cfg.loglevel.lower(), logging.INFO)
 
     # --- 准备你的 Handler 和 Formatter ---
     syslog_handler = NginxAlignedSyslogHandler(
@@ -37,6 +39,7 @@ class GunicornSyslogLogger(GLogger):
     # --- 将 Handler 绑定到 Gunicorn 的两个核心 Logger ---
     # 1. 错误日志 (gunicorn.error) (we dont' remove the default error log handler, just append)
     self.error_log.addHandler(syslog_handler)
+    self.error_log.setLevel(level)
 
     # 2. 访问日志 (gunicorn.access)
     # 移除默认的 access_log handler (防止重复打印到 stdout)
@@ -45,7 +48,7 @@ class GunicornSyslogLogger(GLogger):
     self.access_log.setLevel(level)
     self.access_log.propagate = False
 
-  def access(self, resp, req, environ, request_time):
+  def access(self, resp, req, environ, request_time) -> None:  # type: ignore
     """
     这个方法覆盖了 Gunicorn 默认逻辑。
     它把本该塞进 args 的字典，转而塞进 extra。
