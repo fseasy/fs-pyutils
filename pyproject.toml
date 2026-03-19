@@ -1,6 +1,6 @@
 [project]
 name = "fs-pyutils"
-version = "1.0.0"
+version = "1.1.0"
 description = "Python utils for fseasy scope."
 readme = "README.md"
 authors = [{ name = "fseasy", email = "xuwei.fs@outlook.com" }]
@@ -13,3 +13,17 @@ build-backend = "uv_build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fs_pyutils"]
+
+[tool.ruff]
+line-length = 120
+indent-width = 2
+exclude = []
+
+[tool.ruff.lint]
+# 确保 "I" (isort) 规则在启用列表中
+select = ["E", "F", "B", "UP", "I"]
+
+[tool.ruff.lint.isort]
+# 这里可以像 isort 一样自定义配置
+force-single-line = false # 是否强制单行导入
+combine-as-imports = true # 是否合并 import as
