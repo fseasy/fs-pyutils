@@ -3,7 +3,7 @@ import os
 from typing import Any
 
 #! note1: this module must be used in python env where contains the gunicorn (it's reasonable)
-import gunicorn
+from gunicorn.glogging import Logger as GLogger
 
 from .log_builder import JsonSyslogFormatter, NginxAlignedSyslogHandler
 
@@ -13,7 +13,7 @@ g_syslog_addr_str = os.environ["SYSLOG_ADDRESS"]
 g_hostname = os.getenv("HOSTNAME", "gunicorn-default")
 
 
-class GunicornSyslogLogger(gunicorn.glogging.Logger):
+class GunicornSyslogLogger(GLogger):
   def setup(self, cfg):
     super().setup(cfg)
 
