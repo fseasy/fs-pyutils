@@ -1,0 +1,25 @@
+name: Release To Pypi
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Build
+        run: |
+          uv build
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
