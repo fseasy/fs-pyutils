@@ -10,8 +10,9 @@ from .log_builder import JsonSyslogFormatter, NginxAlignedSyslogHandler
 
 #! note2: you must set `SYSLOG_ADDRESS` in ENV, in format `ip:port`, like: "127.0.0.1:5140"
 g_syslog_addr_str = os.environ["SYSLOG_ADDRESS"]
-#! it's better also set the hostname.
-g_hostname = os.getenv("HOSTNAME", "gunicorn-default")
+#! it's better also set the hostname and tag
+g_syslog_hostname = os.getenv("SYSLOG_HOSTNAME", "gunicorn.default")
+g_syslog_tag = os.getenv("SYSLOG_TAG", "gunicorn_default")
 
 
 class GunicornSyslogLogger(GLogger):
@@ -27,12 +28,13 @@ class GunicornSyslogLogger(GLogger):
     # --- 准备你的 Handler 和 Formatter ---
     syslog_handler = NginxAlignedSyslogHandler(
       address=syslog_address,
-      hostname=g_hostname,
+      hostname=g_syslog_hostname,
+      tag=g_syslog_tag,
       facility=23,  # Local7
     )
 
     # 使用你现有的 JsonSyslogFormatter
-    json_fmt = JsonSyslogFormatter(g_hostname)
+    json_fmt = JsonSyslogFormatter(g_syslog_hostname)
     syslog_handler.setFormatter(json_fmt)
     syslog_handler.setLevel(level)
 

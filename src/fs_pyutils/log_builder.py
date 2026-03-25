@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import json
 import logging
 import socket
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from logging.handlers import SysLogHandler
 
@@ -10,14 +13,36 @@ from typing import Any
 from urllib.parse import urlparse
 
 
+@dataclass
+class SyslogLogField:
+  host: str = "py.app"
+  """You can use 1. domain (https?://xxx.xxx) 2. hostname xxx.xxx 3. or some featured tag."""
+  tag: str = "py_app"
+  """Used as RFC 3164 syslog tag. Will be sanitized. You can use .gen_tag method to generate this one"""
+
+  @classmethod
+  def gen_tag(cls, host: str, tag_suffix: str) -> str:
+    """Generate tag from host+tag-suffix.
+    Args:
+      host: the value you put in the SyslogLogField::host
+    """
+    hostname = _parse_hostname(host)
+    tag = f"{hostname}_{tag_suffix}"
+    return _sanitize4syslog_tag(tag) or "py_app"
+
+
 def build_logger(
-  name: str, level: int, syslog_address: tuple[str, int] | None = None, domain: str | None = None
+  name: str,
+  level: int,
+  syslog_address: tuple[str, int] | None = None,
+  syslog_log_field: SyslogLogField | None = None,
 ) -> logging.Logger:
-  """
+  """It will build a logger with a naive stream logger and a JSON formatted syslog.
   Args:
     syslog_address: used for syslog (you can setup a grafana alloy), will send a json log
-    domain: used in the json logger
+    syslog_log_field: used in log json to signature the log source
   """
+
   logger = logging.getLogger(name)
 
   streamHandler = logging.StreamHandler(stream=sys.stderr)
@@ -30,13 +55,13 @@ def build_logger(
 
   # syslog
   if syslog_address:
+    syslog_log_field = syslog_log_field or SyslogLogField()
     try:
+      hostname = _parse_hostname(syslog_log_field.host)
       syslog_handler = NginxAlignedSyslogHandler(
-        address=syslog_address,
-        hostname=_domain2hostname(domain),
-        facility=SysLogHandler.LOG_LOCAL7,
+        address=syslog_address, hostname=hostname, tag=syslog_log_field.tag, facility=SysLogHandler.LOG_LOCAL7
       )
-      json_fmt = JsonSyslogFormatter(_domain2hostname(domain))
+      json_fmt = JsonSyslogFormatter(syslog_log_field.host)
       syslog_handler.setFormatter(json_fmt)
       syslog_handler.setLevel(level)
       logger.addHandler(syslog_handler)
@@ -63,7 +88,7 @@ class JsonSyslogFormatter(logging.Formatter):
   def __init__(self, host: str):
     """init with a hostname"""
     super().__init__(fmt="%(message)s")
-    self._host = host
+    self._host = host.strip()
 
   def _build_log_dict(self, record: logging.LogRecord) -> dict[str, Any]:
     iso_time = datetime.fromtimestamp(record.created).astimezone().isoformat(timespec="seconds")
@@ -94,13 +119,19 @@ class NginxAlignedSyslogHandler(logging.Handler):
   解决了 Python SysLogHandler 日期填充错误、格式错位的问题。
   """
 
-  def __init__(self, address: tuple[str, int], hostname: str, facility: int = 23):
+  def __init__(self, address: tuple[str, int], hostname: str, tag: str | None = None, facility: int = 23):
+    """
+    Args:
+      - hostname: used in SYSLOG header
+      - app_tag: used in SYSLOG header
+      - facility: used in SYSLOG header (pri), Nginx may use `Local7 (23)` as default.
+    """
     super().__init__()
     self.address = address
-    # 强制替换非法字符，保持与 Nginx (site_docgate) 类似的纯净 TAG
-    self.app_name = f"{hostname.replace('.', '_').replace('-', '_')}_fastapi"
-    self.hostname = hostname
-    self.facility = facility  # Nginx 默认多用 Local7 (23)
+    # tags
+    self.hostname = hostname or "py.app"  # we assert it has value to avoid break the header
+    self.tag = _sanitize4syslog_tag(tag or "py_app") or "py_app"
+    self.facility = facility
     self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
   def emit(self, record: logging.LogRecord) -> None:
@@ -129,8 +160,8 @@ class NginxAlignedSyslogHandler(logging.Handler):
       timestamp = f"{month} {day_str} {time_str}"
 
       # 4. 严格拼接，完全复刻 Nginx 格式: <PRI>TIMESTAMP HOSTNAME TAG: MSG
-      # 注意 self.app_name 后面紧跟冒号和空格 ": "
-      syslog_msg = f"<{pri}>{timestamp} {self.hostname} {self.app_name}: {msg}\n"
+      # 注意 self.tag 后面紧跟冒号和空格 ": "
+      syslog_msg = f"<{pri}>{timestamp} {self.hostname} {self.tag}: {msg}\n"
 
       # 5. 发送 UDP 包
       self.sock.sendto(syslog_msg.encode("utf-8"), self.address)
@@ -173,11 +204,17 @@ def _get_extra_kv(record: logging.LogRecord) -> dict[str, Any]:
   return extra_data
 
 
-def _domain2hostname(domain: str | None) -> str:
-  _DEFAULT_HOST = "default_app"
-  if not domain:
-    return _DEFAULT_HOST
-  host = urlparse(domain if "://" in domain else "https://" + domain).hostname
-  if not host:
-    host = _DEFAULT_HOST
-  return host
+def _parse_hostname(host: str) -> str:
+  # 1. is it a domain?
+  hostname = urlparse(host if "://" in host else "https://" + host).hostname
+  if hostname:
+    return hostname
+  # not a valid domain, return the raw input
+  return host.strip()  # at least remove surrounding space
+
+
+def _sanitize4syslog_tag(s: str) -> str:
+  r"""For safety, replace anything except alphabet&digit&_ to `_`, merge duplicated invalid char"""
+  import re
+
+  return re.sub(r"[^a-zA-Z0-9_]+", "_", s).strip("_")
