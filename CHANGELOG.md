@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/fseasy/fs-pyutils/compare/v1.1.2...v2.0.0) (2026-03-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* fix previous commit info error to trigger release
+
+### Features
+
+* fix previous commit info error to trigger release ([518ff1c](https://github.com/fseasy/fs-pyutils/commit/518ff1c68d01a2ad1cd346e1ce00c178915c4f0b))
+
 ## [1.1.2](https://github.com/fseasy/fs-pyutils/compare/v1.1.1...v1.1.2) (2026-03-24)
 
 
