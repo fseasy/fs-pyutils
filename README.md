@@ -35,7 +35,7 @@ Please note that we didn't install necessary dependencies for the utils as it sh
 ## Usage
 
 ```python
-from fs_pyutils.import import import_module_from_path
+from fs_pyutils.lang_basic import import_module_from_path
 
 module = import_module_from_path("local_conf", "./conf.py")
 ```
